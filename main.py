@@ -2,6 +2,11 @@ import pygame
 from enums import Pieces
 import os
 
+# TODO
+# Castles
+# Turns
+# check for check
+
 COLOR_LIGHT = (245, 245, 220)
 COLOR_DARK = (148, 69, 48)
 COLOR_MOVE_HIGHLIGHT = (137, 137, 137, 80)
@@ -73,7 +78,7 @@ class Game_Control:
             screen.blit(pygame.transform.scale(IMAGES[Pieces.ROOK_WHITE], (50, 50)), self.rook_select_hitbox)
             screen.blit(pygame.transform.scale(IMAGES[Pieces.BISHOP_WHITE], (50, 50)), self.bishop_select_hitbox)
             screen.blit(pygame.transform.scale(IMAGES[Pieces.KNIGHT_WHITE], (50, 50)), self.knight_select_hitbox)
-        elif self.queen_select_hitbox.y == 700:     # at the 7th rank --> black promoted
+        elif self.queen_select_hitbox.y == 700:  # at the 7th rank --> black promoted
             screen.blit(pygame.transform.scale(IMAGES[Pieces.QUEEN_BLACK], (50, 50)), self.queen_select_hitbox)
             screen.blit(pygame.transform.scale(IMAGES[Pieces.ROOK_BLACK], (50, 50)), self.rook_select_hitbox)
             screen.blit(pygame.transform.scale(IMAGES[Pieces.BISHOP_BLACK], (50, 50)), self.bishop_select_hitbox)
@@ -82,7 +87,10 @@ class Game_Control:
     def draw_active_piece(self):
         if self.active_piece is not None:
             for move in self.legal_moves:  # draw move highlight markers
-                pygame.draw.circle(screen, COLOR_MOVE_HIGHLIGHT, (move[0] * 100 + 50, move[1] * 100 + 50), 10, 0)
+                if self.board.is_empty([move[0], move[1]]):
+                    pygame.draw.circle(screen, COLOR_MOVE_HIGHLIGHT, (move[0] * 100 + 50, move[1] * 100 + 50), 10, 0)
+                else:
+                    pygame.draw.circle(screen, COLOR_MOVE_HIGHLIGHT, (move[0] * 100 + 50, move[1] * 100 + 50), 49, 3)
 
             pos = pygame.mouse.get_pos()
             screen.blit(IMAGES[self.active_piece], (pos[0] - 50, pos[1] - 50))
@@ -126,7 +134,7 @@ class Game_Control:
             elif self.knight_select_hitbox.collidepoint(pos):
                 self.board.board[x_pos][y_pos] = Pieces.KNIGHT_WHITE
                 self.render_promotion_select = False
-        elif self.queen_select_hitbox.y == 700:     # at the 7th rank --> black promoted
+        elif self.queen_select_hitbox.y == 700:  # at the 7th rank --> black promoted
             if self.queen_select_hitbox.collidepoint(pos):
                 self.board.board[x_pos][y_pos] = Pieces.QUEEN_BLACK
                 self.render_promotion_select = False
@@ -177,8 +185,241 @@ class Game_Control:
 
             self.render_promotion_select = True
 
+    def is_square_protected(self, square, color) -> bool:
+        if color == 1:  # WHITE PIECE
+
+            # check for black knight
+            moves = [[square[0] - 1, square[1] - 2], [square[0] + 1, square[1] - 2], [square[0] + 2, square[1] - 1],
+                     [square[0] + 2, square[1] + 1], [square[0] + 1, square[1] + 2], [square[0] - 1, square[1] + 2],
+                     [square[0] - 2, square[1] - 1], [square[0] - 2, square[1] + 1]]
+
+            # filtering moves that are outside the board
+            moves = [move for move in moves if 0 <= move[0] <= 7 and 0 <= move[1] <= 7]
+
+            for move in moves:
+                if self.board.board[move[0]][move[1]] == Pieces.KNIGHT_BLACK:
+                    return True
+
+            # check for black pawns
+            moves = [[square[0] - 1, square[1] - 1], [square[0] + 1, square[1] - 1]]
+
+            # filtering moves that are outside the board
+            moves = [move for move in moves if 0 <= move[0] <= 7 and 0 <= move[1] <= 7]
+
+            for move in moves:
+                if self.board.board[move[0]][move[1]] == Pieces.PAWN_BLACK:
+                    return True
+
+            # check for black King
+            moves = [[square[0] - 1, square[1] - 1], [square[0], square[1] - 1], [square[0] + 1, square[1] - 1],
+                     [square[0] - 1, square[1]], [square[0] + 1, square[1]],
+                     [square[0] - 1, square[1] + 1], [square[0], square[1] + 1], [square[0] + 1, square[1] + 1]]
+
+            # filtering moves that are outside the board
+            moves = [move for move in moves if 0 <= move[0] <= 7 and 0 <= move[1] <= 7]
+
+            for move in moves:
+                if self.board.board[move[0]][move[1]] == Pieces.KING_BLACK:
+                    return True
+
+            # check for black bishop or queen
+            pos = square.copy()
+            while pos[0] < 7 and pos[1] < 7:  # bottom right
+                pos[0] += 1
+                pos[1] += 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_BLACK or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.BISHOP_BLACK:
+                        return True
+                    else:
+                        break
+
+            pos = square.copy()
+            while pos[0] < 7 and pos[1] > 0:  # top right
+                pos[0] += 1
+                pos[1] -= 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_BLACK or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.BISHOP_BLACK:
+                        return True
+                    else:
+                        break
+
+            pos = square.copy()
+            while pos[0] > 0 and pos[1] > 0:  # top left
+                pos[0] -= 1
+                pos[1] -= 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_BLACK or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.BISHOP_BLACK:
+                        return True
+                    else:
+                        break
+
+            pos = square.copy()
+            while pos[0] > 0 and pos[1] < 7:  # bottom left
+                pos[0] -= 1
+                pos[1] += 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_BLACK or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.BISHOP_BLACK:
+                        return True
+                    else:
+                        break
+
+            # check for Black rook or queen
+            pos = square.copy()
+            while pos[1] < 7:  # dowm
+                pos[1] += 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_BLACK or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.ROOK_BLACK:
+                        return True
+                    else:
+                        break
+
+            pos = square.copy()
+            while pos[1] > 0:  # up
+                pos[1] -= 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_BLACK or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.ROOK_BLACK:
+                        return True
+                    else:
+                        break
+
+            pos = square.copy()
+            while pos[0] < 7:  # right
+                pos[0] += 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_BLACK or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.ROOK_BLACK:
+                        return True
+                    else:
+                        break
+
+            pos = square.copy()
+            while pos[0] > 0:  # left
+                pos[0] -= 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_BLACK or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.ROOK_BLACK:
+                        return True
+                    else:
+                        break
+        elif color == -1:   # Black Piece
+            # check for White knight
+            moves = [[square[0] - 1, square[1] - 2], [square[0] + 1, square[1] - 2], [square[0] + 2, square[1] - 1],
+                     [square[0] + 2, square[1] + 1], [square[0] + 1, square[1] + 2], [square[0] - 1, square[1] + 2],
+                     [square[0] - 2, square[1] - 1], [square[0] - 2, square[1] + 1]]
+
+            # filtering moves that are outside the board
+            moves = [move for move in moves if 0 <= move[0] <= 7 and 0 <= move[1] <= 7]
+
+            for move in moves:
+                if self.board.board[move[0]][move[1]] == Pieces.KNIGHT_WHITE:
+                    return True
+
+            # check for white pawns
+            moves = [[square[0] - 1, square[1] - 1], [square[0] + 1, square[1] - 1]]
+
+            # filtering moves that are outside the board
+            moves = [move for move in moves if 0 <= move[0] <= 7 and 0 <= move[1] <= 7]
+
+            for move in moves:
+                if self.board.board[move[0]][move[1]] == Pieces.PAWN_WHITE:
+                    return True
+
+            # check for white King
+            moves = [[square[0] - 1, square[1] - 1], [square[0], square[1] - 1], [square[0] + 1, square[1] - 1],
+                     [square[0] - 1, square[1]], [square[0] + 1, square[1]],
+                     [square[0] - 1, square[1] + 1], [square[0], square[1] + 1], [square[0] + 1, square[1] + 1]]
+
+            # filtering moves that are outside the board
+            moves = [move for move in moves if 0 <= move[0] <= 7 and 0 <= move[1] <= 7]
+
+            for move in moves:
+                if self.board.board[move[0]][move[1]] == Pieces.KING_WHITE:
+                    return True
+
+            # check for white bishop or queen
+            pos = square.copy()
+            while pos[0] < 7 and pos[1] < 7:  # bottom right
+                pos[0] += 1
+                pos[1] += 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_WHITE or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.BISHOP_WHITE:
+                        return True
+
+            pos = square.copy()
+            while pos[0] < 7 and pos[1] > 0:  # top right
+                pos[0] += 1
+                pos[1] -= 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_WHITE or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.BISHOP_WHITE:
+                        return True
+
+            pos = square.copy()
+            while pos[0] > 0 and pos[1] > 0:  # top left
+                pos[0] -= 1
+                pos[1] -= 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_WHITE or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.BISHOP_WHITE:
+                        return True
+
+            pos = square.copy()
+
+            while pos[0] > 0 and pos[1] < 7:  # bottom left
+                pos[0] -= 1
+                pos[1] += 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_WHITE or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.BISHOP_WHITE:
+                        return True
+
+            # check for White rook or queen
+            pos = square.copy()
+            while pos[1] < 7:  # dowm
+                pos[1] += 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_WHITE or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.ROOK_WHITE:
+                        return True
+
+            pos = square.copy()
+            while pos[1] > 0:  # up
+                pos[1] -= 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_WHITE or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.ROOK_WHITE:
+                        return True
+
+            pos = square.copy()
+            while pos[0] < 7:  # right
+                pos[0] += 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_WHITE or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.ROOK_WHITE:
+                        return True
+
+            pos = square.copy()
+            while pos[0] > 0:  # left
+                pos[0] -= 1
+                if self.board.board[pos[0]][pos[1]] != Pieces.EMPTY:
+                    if self.board.board[pos[0]][pos[1]] == Pieces.QUEEN_WHITE or \
+                            self.board.board[pos[0]][pos[1]] == Pieces.ROOK_WHITE:
+                        return True
+        return False
+
     def calculate_legal_moves(self, piece, square):
         if piece == Pieces.KING_WHITE or piece == Pieces.KING_BLACK:  # King
+            if piece == Pieces.KING_WHITE:
+                color = 1
+            else:
+                color = -1
             moves = [[square[0] - 1, square[1] - 1], [square[0], square[1] - 1], [square[0] + 1, square[1] - 1],
                      [square[0] - 1, square[1]], [square[0] + 1, square[1]],
                      [square[0] - 1, square[1] + 1], [square[0], square[1] + 1], [square[0] + 1, square[1] + 1]]
@@ -187,7 +428,10 @@ class Game_Control:
             moves = [move for move in moves if 0 <= move[0] <= 7 and 0 <= move[1] <= 7]
 
             # filtering not empty squares
-            moves = [move for move in moves if self.board.is_empty(move)]
+            moves = [move for move in moves if self.board.get_color(move) != color]
+
+            # #filtering protected squares
+            moves = [move for move in moves if not self.is_square_protected(move, color)]
 
             return moves
 
@@ -438,11 +682,12 @@ class Game_Control:
                 moves = []
 
             if self.double_pawn_move is not None:  # En Passent
-                if square[1] == 4 and (square[0] + 1 == self.double_pawn_move or square[0] - 1 == self.double_pawn_move):
+                if square[1] == 4 and (
+                        square[0] + 1 == self.double_pawn_move or square[0] - 1 == self.double_pawn_move):
                     moves.append([self.double_pawn_move, square[1] + 1])
 
             if square[0] < 7:
-                if self.board.get_color([square[0] + 1, square[1] + 1]) == 1:   # captures
+                if self.board.get_color([square[0] + 1, square[1] + 1]) == 1:  # captures
                     moves.append([square[0] + 1, square[1] + 1])
             if square[0] > 0:
                 if self.board.get_color([square[0] - 1, square[1] + 1]) == 1:
@@ -460,11 +705,12 @@ class Game_Control:
                 moves = []
 
             if self.double_pawn_move is not None:  # En Passent
-                if square[1] == 3 and (square[0] + 1 == self.double_pawn_move or square[0] - 1 == self.double_pawn_move):
+                if square[1] == 3 and (
+                        square[0] + 1 == self.double_pawn_move or square[0] - 1 == self.double_pawn_move):
                     moves.append([self.double_pawn_move, square[1] - 1])
 
             if square[0] < 7:
-                if self.board.get_color([square[0] + 1, square[1] - 1]) == -1:   # captures
+                if self.board.get_color([square[0] + 1, square[1] - 1]) == -1:  # captures
                     moves.append([square[0] + 1, square[1] - 1])
             if square[0] > 0:
                 if self.board.get_color([square[0] - 1, square[1] - 1]) == -1:
@@ -548,9 +794,9 @@ class Board:
 
     def get_color(self, square):
         if Pieces.PAWN_WHITE <= self.board[square[0]][square[1]] <= Pieces.KING_WHITE:
-            return 1    # white
+            return 1  # white
         elif Pieces.PAWN_BLACK <= self.board[square[0]][square[1]] <= Pieces.KING_BLACK:
-            return -1   # black
+            return -1  # black
         else:
             return 0
 
