@@ -6,6 +6,7 @@ import os
 # Castles
 # Turns
 # check for check
+# allow only moves that stop the check
 
 COLOR_LIGHT = (245, 245, 220)
 COLOR_DARK = (148, 69, 48)
@@ -40,6 +41,81 @@ def get_nearest_center(pos):
 
     return [rank, row]
 
+class Castle_Check:
+    def __init__(self):
+        self.can_white_castle_queenside = True
+        self.can_white_castle_kingside = True
+        self.can_black_castle_queenside = True
+        self.can_black_castle_kingside = True
+
+    def check_for_castle(self, board, color, side) -> bool:
+        """
+
+        :param board: the current board configuration
+        :param color: the color of the king that tries to castle 1 = white, -1 = black
+        :param side: the side that the king tries to castle 1 = Kingside, -1 = Queenside
+        :return: is the castle operation possible
+        """
+
+        if color == 1:
+            rank = 7
+        else:
+            rank = 0
+
+        if side == 1:  # Kingside
+            if color == 1 and not self.can_white_castle_kingside:
+                return False
+            elif color == -1 and not self.can_black_castle_kingside:
+                return False
+
+            if board[5][rank] == Pieces.EMPTY and board[6][rank] == Pieces.EMPTY:
+                return True
+            else:
+                return False
+
+        if side == -1:  # Queenside
+            if color == 1 and not self.can_white_castle_queenside:
+                return False
+            elif color == -1 and not self.can_black_castle_queenside:
+                return False
+
+            if board[1][rank] == Pieces.EMPTY and board[2][rank] == Pieces.EMPTY and board[3][rank] == Pieces.EMPTY:
+                return True
+            else:
+                return False
+
+    def check_for_lost_castle_right(self, piece, orig_pos):
+        if piece == Pieces.KING_WHITE:
+            self.can_white_castle_kingside, self.can_white_castle_queenside = False, False
+        elif piece == Pieces.ROOK_WHITE:
+            if orig_pos[1] == 0:
+                self.can_white_castle_queenside = False
+            elif orig_pos[1] == 7:
+                self.can_white_castle_kingside = False
+        elif piece == Pieces.KING_BLACK:
+            self.can_black_castle_kingside, self.can_black_castle_queenside = False, False
+        elif piece == Pieces.ROOK_BLACK:
+            if orig_pos[1] == 0:
+                self.can_black_castle_queenside = False
+            elif orig_pos[1] == 7:
+                self.can_black_castle_kingside = False
+
+    def get_castle_direction(self, piece, orig_pos, new_pos) -> int:
+        if piece == Pieces.KING_BLACK or piece == Pieces.KING_WHITE:
+            if 2 <= new_pos[0] - orig_pos[0] <= 3:  # kingside
+                if new_pos[1] == 0:  # --> black castled
+                    self.can_black_castle_kingside = False
+                else:  # --> white castled
+                    self.can_white_castle_kingside = False
+                return 1
+            elif 2 <= orig_pos[0] - new_pos[0] <= 4:  # queenside
+                if new_pos[1] == 0:  # --> black castled
+                    self.can_black_castle_queenside = False
+                else:  # --> white castled
+                    self.can_white_castle_queenside = False
+                return -1
+        return 0
+
 
 class Game_Control:
     def __init__(self, board):
@@ -59,6 +135,8 @@ class Game_Control:
         self.rook_select_hitbox = None
         self.bishop_select_hitbox = None
         self.knight_select_hitbox = None
+
+        self.castle_check = Castle_Check()
 
     def update(self):
         while self.running:
@@ -154,9 +232,35 @@ class Game_Control:
             self.check_for_en_passent(self.active_piece, square)
             self.check_for_double_pawn_move(self.active_piece, square)
             self.check_for_promote(self.active_piece, square)
+            self.handle_castle(square)
         else:
             self.board.board[self.orig_pos[0]][self.orig_pos[1]] = self.active_piece
         self.active_piece = None
+
+    def handle_castle(self, square):
+        self.castle_check.check_for_lost_castle_right(self.active_piece, self.orig_pos)
+        castle_dir = self.castle_check.get_castle_direction(self.active_piece, self.orig_pos, square)
+        if castle_dir == 1:  # Kingside
+            if square[1] == 0:  # --> black castled
+                self.board.board[7][0] = Pieces.EMPTY
+                self.board.board[6][0] = Pieces.KING_BLACK
+                self.board.board[5][0] = Pieces.ROOK_BLACK
+            else:
+                self.board.board[7][7] = Pieces.EMPTY
+                self.board.board[6][7] = Pieces.KING_WHITE
+                self.board.board[5][7] = Pieces.ROOK_WHITE
+
+        if castle_dir == -1:  # Queenside
+            if square[1] == 0:  # --> black castled
+                self.board.board[0][0] = Pieces.EMPTY
+                self.board.board[1][0] = Pieces.EMPTY
+                self.board.board[2][0] = Pieces.KING_BLACK
+                self.board.board[3][0] = Pieces.ROOK_BLACK
+            else:
+                self.board.board[0][7] = Pieces.EMPTY
+                self.board.board[1][7] = Pieces.EMPTY
+                self.board.board[2][7] = Pieces.KING_WHITE
+                self.board.board[3][7] = Pieces.ROOK_WHITE
 
     def check_for_double_pawn_move(self, piece, square):
         if piece == Pieces.PAWN_WHITE and square[1] - self.orig_pos[1] == -2:
@@ -307,7 +411,7 @@ class Game_Control:
                         return True
                     else:
                         break
-        elif color == -1:   # Black Piece
+        elif color == -1:  # Black Piece
             # check for White knight
             moves = [[square[0] - 1, square[1] - 2], [square[0] + 1, square[1] - 2], [square[0] + 2, square[1] - 1],
                      [square[0] + 2, square[1] + 1], [square[0] + 1, square[1] + 2], [square[0] - 1, square[1] + 2],
@@ -432,6 +536,15 @@ class Game_Control:
 
             # #filtering protected squares
             moves = [move for move in moves if not self.is_square_protected(move, color)]
+
+            if self.castle_check.check_for_castle(self.board.board, color, 1):
+                moves.append([6, square[1]])
+                moves.append([7, square[1]])
+
+            if self.castle_check.check_for_castle(self.board.board, color, -1):
+                moves.append([0, square[1]])
+                moves.append([1, square[1]])
+                moves.append([2, square[1]])
 
             return moves
 
@@ -815,6 +928,6 @@ class Board:
 
 if __name__ == "__main__":
     chess_board = Board()
-    chess_board.read_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+    chess_board.read_fen_string("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
     game = Game_Control(chess_board)
     game.update()
